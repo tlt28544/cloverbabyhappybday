@@ -4,16 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Happy Birthday Clover</title>
+    <!-- 加载 MediaPipe 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #050505;
+            background-color: #000;
             font-family: 'Helvetica Neue', Arial, sans-serif;
             user-select: none;
             -webkit-user-select: none;
         }
 
+        /* 摄像头背景层 */
+        .input_video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            opacity: 0.2;
+            transform: scaleX(-1);
+            filter: grayscale(80%) contrast(1.2);
+        }
+
+        /* 粒子层 */
         #canvas-container {
             position: absolute;
             top: 0;
@@ -44,51 +63,77 @@
             pointer-events: none !important;
         }
 
-        /* Start Button & Intro */
+        /* Dialogue Box */
         #start-screen {
             text-align: center;
             color: white;
             pointer-events: auto;
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(0, 0, 0, 0.75); /*稍微加深背景以突出文字*/
             padding: 40px;
             border-radius: 20px;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 105, 180, 0.3);
-            box-shadow: 0 0 30px rgba(255, 105, 180, 0.2);
+            box-shadow: 0 0 40px rgba(255, 105, 180, 0.2);
             max-width: 90%;
+            width: 400px;
+            transition: all 0.3s ease;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
-        h1 {
+        #dialogue-text {
             font-weight: 300;
-            font-size: 2rem;
-            margin-bottom: 10px;
-            letter-spacing: 2px;
-            color: #fff;
-        }
-
-        .quote {
-            font-style: italic;
-            color: #ffb7c5;
+            font-size: 1.4rem;
             margin-bottom: 30px;
-            font-size: 1.1rem;
-            opacity: 0.9;
+            line-height: 1.6;
+            color: #fff;
+            white-space: pre-wrap; /* 支持换行 */
         }
 
-        button {
-            padding: 15px 40px;
-            font-size: 1.2rem;
-            background: linear-gradient(45deg, #ff69b4, #9370db);
+        /* Highlight Speaker Name */
+        .speaker-name {
+            color: #ff69b4;
+            font-weight: bold;
+            font-size: 1.1rem;
+            display: block;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .choices-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+        }
+
+        button.choice-btn {
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            background: rgba(255, 255, 255, 0.1);
             color: white;
-            border: none;
-            border-radius: 50px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        button.choice-btn:hover {
+            background: linear-gradient(45deg, #ff69b4, #9370db);
+            border-color: transparent;
+            transform: scale(1.02);
             box-shadow: 0 5px 15px rgba(147, 112, 219, 0.4);
         }
-
-        button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 8px 20px rgba(147, 112, 219, 0.6);
+        
+        button.choice-btn.primary {
+             background: linear-gradient(45deg, #ff69b4, #9370db);
+             border: none;
+             font-weight: bold;
         }
 
         /* Status & Hints */
@@ -97,25 +142,20 @@
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
             text-align: center;
             width: 100%;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
 
         #gesture-hint {
             margin-top: 5px;
             font-weight: bold;
             color: #ff69b4;
-            text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.8);
         }
 
-        /* Camera Feed (Hidden, used for processing) */
-        .input_video {
-            display: none;
-        }
-
-        /* Music Toggle */
         #music-toggle {
             position: absolute;
             top: 20px;
@@ -129,6 +169,25 @@
             pointer-events: auto;
         }
         #music-toggle:hover { opacity: 1; }
+        
+        #error-msg {
+            color: #ff6b6b;
+            font-size: 0.8rem;
+            margin-top: 10px;
+            display: none;
+        }
+
+        /* Loading Spinner for buttons */
+        .loading-dots:after {
+            content: ' .';
+            animation: dots 1s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { color: rgba(0,0,0,0); text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);}
+            40% { color: white; text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);}
+            60% { text-shadow: .25em 0 0 white, .5em 0 0 rgba(0,0,0,0);}
+            80%, 100% { text-shadow: .25em 0 0 white, .5em 0 0 white;}
+        }
 
     </style>
 </head>
@@ -137,14 +196,12 @@
     <!-- UI Layer -->
     <div id="ui-layer">
         <div id="start-screen">
-            <h1>For Clover</h1>
-            <p class="quote">“This surprise is dedicated to Clover — the one who makes my world sparkle.”</p>
-            <button id="start-btn">开启惊喜 ✨</button>
-            <p style="font-size: 0.8rem; margin-top: 20px; color: #aaa;">
-                互动方式：<br>
-                1. 摄像头：捏合手指聚集，张开手掌散开<br>
-                2. 鼠标/触摸：按住聚集，松开散开
-            </p>
+            <div id="dialogue-content">
+                <!-- Content injected by JS -->
+                <div id="dialogue-text">加载中...</div>
+                <div class="choices-container" id="choices-box"></div>
+            </div>
+            <p id="error-msg"></p>
         </div>
     </div>
 
@@ -158,19 +215,55 @@
     <!-- WebGL Container -->
     <div id="canvas-container"></div>
 
-    <!-- Hidden Video Element for MediaPipe -->
+    <!-- Video Element -->
     <video class="input_video" playsinline></video>
 
-    <!-- Import Maps for Three.js & MediaPipe -->
+    <!-- Main Logic -->
     <script type="module">
         import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
-        import { Hands } from 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js';
-        import { Camera } from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js';
+        
+        // --- Script / Dialogue Data ---
+        const SCRIPT = {
+            step1: {
+                text: "<span class='speaker-name'>Leslie:</span>长了一岁，智商 +1，\n你还相信魔法吗？",
+                choices: [
+                    { text: "A. 相信 ✨", next: "start" },
+                    { text: "B. 不相信 🌚", next: "step2" }
+                ]
+            },
+            step2: {
+                text: "<span class='speaker-name'>Leslie:</span>我也许真的懂一点魔法哦，\n你想看一下吗？",
+                choices: [
+                    { text: "A. 想 🙋‍♀️", next: "start" },
+                    { text: "B. 不想 🙅‍♀️", next: "step3" }
+                ]
+            },
+            step3: {
+                text: "<span class='speaker-name'>Leslie:</span>那…你想不想看看，\n这个世界为你偷偷准备的小惊喜？",
+                choices: [
+                    { text: "A. 想 👀", next: "start" },
+                    { text: "B. 不想 😑", next: "step4" }
+                ]
+            },
+            step4: {
+                text: "<span class='speaker-name'>Leslie:</span>😯 可是…我已经准备好了…\nClover，你确定…真的不想看看吗？",
+                choices: [
+                    { text: "A. 好吧 👀", next: "start" },
+                    { text: "B. 我才不想呢 🙅‍♀️", next: "step5" }
+                ]
+            },
+            step5: {
+                text: "<span class='speaker-name'>Leslie:</span>😢 可是……\n🎀 这份魔法，是专属于你的。\n所以……我还是想给你看看。\n请收下这份生日魔法吧 ✨",
+                choices: [
+                    { text: "🎁 收下魔法", next: "start", primary: true }
+                ]
+            }
+        };
 
         // --- Configuration ---
         const CONFIG = {
-            particleCount: 4000,
-            colors: [0xff69b4, 0xffb7c5, 0x9370db, 0xffffff], // HotPink, LightPink, MediumPurple, White
+            particleCount: 5000, 
+            colors: [0xff69b4, 0xffb7c5, 0x9370db, 0xffffff], 
             textSequence: ["3", "2", "1", "Clover", "Happy", "Birthday", "祝你", "开心", "快乐", "每一天", "❤️"],
             cameraZ: 100,
             textScale: 0.6,
@@ -182,52 +275,111 @@
         let currentPositions = []; 
         let randomPositions = []; 
         let isScattered = true;
-        let dispersionLevel = 1.0; // 1 = Scattered, 0 = Assembled
+        let dispersionLevel = 1.0; 
         let currentTextIndex = 0;
         let audio;
         let isAudioPlaying = false;
         
-        // Touch/Mouse Fallback state
         let isTouching = false; 
         let hasAssembledOnce = false; 
+        let libsLoaded = false;
 
-        // --- Initialization ---
-        const startBtn = document.getElementById('start-btn');
+        // --- DOM Elements ---
         const startScreen = document.getElementById('start-screen');
+        const dialogueText = document.getElementById('dialogue-text');
+        const choicesBox = document.getElementById('choices-box');
         const statusBar = document.getElementById('status-bar');
         const loadingText = document.getElementById('loading-text');
         const gestureHint = document.getElementById('gesture-hint');
         const musicToggle = document.getElementById('music-toggle');
+        const errorMsg = document.getElementById('error-msg');
 
-        startBtn.addEventListener('click', async () => {
-            initAudio();
-            
-            startScreen.style.opacity = '0';
-            setTimeout(() => {
-                startScreen.classList.add('hidden');
-                statusBar.classList.remove('hidden');
-                musicToggle.classList.remove('hidden');
-            }, 1000);
+        // --- Dialogue Logic ---
+        function renderStep(stepKey) {
+            const stepData = SCRIPT[stepKey];
+            dialogueText.innerHTML = stepData.text;
+            choicesBox.innerHTML = '';
 
-            initThree();
-            generateTextTargets(CONFIG.textSequence[0]);
-            
-            // Try to init MediaPipe, but fail gracefully if in preview env
-            try {
-                initMediaPipe();
-            } catch (e) {
-                console.warn("MediaPipe init failed (likely due to iframe permissions). Using mouse/touch fallback.");
-                loadingText.innerText = "使用鼠标/触摸模式";
-                gestureHint.innerText = "按住屏幕聚集粒子";
+            stepData.choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = `choice-btn ${choice.primary ? 'primary' : ''}`;
+                btn.innerText = choice.text;
+                
+                // If libs not loaded yet, show loading state on button
+                if (choice.next === 'start' && !libsLoaded) {
+                    btn.disabled = true;
+                    btn.innerHTML = choice.text + " <span class='loading-dots'>(资源加载中)</span>";
+                    btn.dataset.originalText = choice.text;
+                }
+
+                btn.onclick = () => {
+                    if (choice.next === 'start') {
+                        startSurprise();
+                    } else {
+                        renderStep(choice.next);
+                    }
+                };
+                choicesBox.appendChild(btn);
+            });
+        }
+
+        // Initial Render
+        renderStep('step1');
+
+        // Check Libs and enable buttons
+        function checkLibs() {
+            if (window.Hands && window.Camera && THREE) {
+                libsLoaded = true;
+                // Enable any disabled buttons
+                const buttons = document.querySelectorAll('.choice-btn');
+                buttons.forEach(btn => {
+                    if (btn.disabled) {
+                        btn.disabled = false;
+                        if (btn.dataset.originalText) {
+                            btn.innerText = btn.dataset.originalText;
+                        }
+                    }
+                });
+            } else {
+                setTimeout(checkLibs, 500);
             }
-            
-            animate();
-        });
+        }
+        checkLibs();
+
+        // --- Start Sequence ---
+        function startSurprise() {
+            startScreen.classList.add('hidden');
+            statusBar.classList.remove('hidden');
+            musicToggle.classList.remove('hidden');
+
+            setTimeout(async () => {
+                try {
+                    try { initAudio(); } catch(e) { console.warn("Audio init failed", e); }
+                    
+                    initThree();
+                    generateTextTargets(CONFIG.textSequence[0]);
+                    
+                    try {
+                        await initMediaPipe();
+                    } catch (e) {
+                        console.warn("MediaPipe init failed.", e);
+                        loadingText.innerText = "使用鼠标/触摸模式";
+                        gestureHint.innerText = "按住屏幕聚集粒子";
+                    }
+
+                    animate();
+                } catch (err) {
+                    console.error("Critical Error:", err);
+                    alert("启动出现问题，请刷新重试。\n" + err.message);
+                    startScreen.classList.remove('hidden');
+                    errorMsg.style.display = 'block';
+                    errorMsg.innerText = "Error: " + err.message;
+                }
+            }, 100);
+        }
 
         // --- Audio ---
         function initAudio() {
-            // Using a simple royalty-free base64 or external link. 
-            // External links can be flaky in previews, so we handle errors gently.
             audio = new Audio('https://cdn.pixabay.com/audio/2022/02/07/audio_1303830d1c.mp3'); 
             audio.loop = true;
             audio.volume = 0.5;
@@ -243,14 +395,16 @@
                 isAudioPlaying = !isAudioPlaying;
             });
             
-            audio.play().then(() => {
-                isAudioPlaying = true;
-                musicToggle.style.opacity = '1';
-            }).catch(e => {
-                console.log("Audio autoplay blocked, user interaction needed");
-                isAudioPlaying = false;
-                musicToggle.style.opacity = '0.5';
-            });
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    isAudioPlaying = true;
+                    musicToggle.style.opacity = '1';
+                }).catch(error => {
+                    isAudioPlaying = false;
+                    musicToggle.style.opacity = '0.5';
+                });
+            }
         }
 
         // --- Three.js Setup ---
@@ -258,7 +412,6 @@
             const container = document.getElementById('canvas-container');
 
             scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x050505, 0.002);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.z = CONFIG.cameraZ;
@@ -272,8 +425,6 @@
 
             window.addEventListener('resize', onWindowResize);
             
-            // Mouse/Touch Fallback
-            // Mousedown/Touchstart = Pinch (Assemble)
             document.addEventListener('mousedown', () => { isTouching = true; });
             document.addEventListener('mouseup', () => { isTouching = false; });
             document.addEventListener('touchstart', (e) => { isTouching = true; e.preventDefault(); }, {passive: false});
@@ -316,13 +467,13 @@
             const sprite = getTexture();
 
             material = new THREE.PointsMaterial({
-                size: 2.5,
+                size: 3.5, 
                 vertexColors: true,
                 map: sprite,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false,
                 transparent: true,
-                opacity: 0.8
+                opacity: 0.9
             });
 
             particles = new THREE.Points(geometry, material);
@@ -346,21 +497,22 @@
             return texture;
         }
 
+        // --- Text Generation ---
         function generateTextTargets(text) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const width = 400; 
-            const height = 200;
+            const width = 600; 
+            const height = 300;
             canvas.width = width;
             canvas.height = height;
 
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, width, height);
+            ctx.clearRect(0, 0, width, height); 
             
-            let fontSize = 100;
-            if (text.length > 5) fontSize = 60;
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.fillStyle = '#ffffff';
+            let fontSize = 180; 
+            if (text.length > 5) fontSize = 100;
+            
+            ctx.font = `900 ${fontSize}px Arial, sans-serif`; 
+            ctx.fillStyle = '#ffffff'; 
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(text, width / 2, height / 2);
@@ -370,13 +522,13 @@
 
             const tempTargets = [];
             
-            // Adjust scan step based on particle density desire
-            for (let y = 0; y < height; y += 2) { 
-                for (let x = 0; x < width; x += 2) {
+            const step = 4; 
+            for (let y = 0; y < height; y += step) { 
+                for (let x = 0; x < width; x += step) {
                     const alpha = data[(y * width + x) * 4 + 3];
                     if (alpha > 128) {
-                        const pX = (x - width / 2) * 0.5;
-                        const pY = -(y - height / 2) * 0.5;
+                        const pX = (x - width / 2) * 0.4; 
+                        const pY = -(y - height / 2) * 0.4;
                         const pZ = 0;
                         tempTargets.push(new THREE.Vector3(pX, pY, pZ));
                     }
@@ -387,17 +539,18 @@
                 if (i < tempTargets.length) {
                     targetPositions[i] = tempTargets[i];
                 } else {
-                    // Extras orbit center
                     targetPositions[i] = tempTargets[i % tempTargets.length];
                 }
             }
         }
 
-        function initMediaPipe() {
+        async function initMediaPipe() {
             const videoElement = document.querySelector('.input_video');
             
-            const hands = new Hands({locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+            if (!window.Hands) throw new Error("MediaPipe Hands library not loaded");
+            
+            const hands = new window.Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
             }});
 
             hands.setOptions({
@@ -409,7 +562,9 @@
 
             hands.onResults(onHandsResults);
 
-            const cameraUtils = new Camera(videoElement, {
+            if (!window.Camera) throw new Error("MediaPipe Camera library not loaded");
+
+            const cameraUtils = new window.Camera(videoElement, {
                 onFrame: async () => {
                     await hands.send({image: videoElement});
                 },
@@ -417,21 +572,14 @@
                 height: 480
             });
             
-            cameraUtils.start()
-                .then(() => {
-                    loadingText.innerText = "摄像头启动成功";
-                    gestureHint.innerText = "👐 张开=散开 | 👌 捏合=聚集";
-                })
-                .catch(err => {
-                    loadingText.innerText = "摄像头不可用，请使用点击模式";
-                    gestureHint.innerText = "按住屏幕聚集粒子";
-                    console.error("Camera failed:", err);
-                });
+            return cameraUtils.start().then(() => {
+                loadingText.innerText = "摄像头启动成功";
+                gestureHint.innerText = "👐 张开=散开 | 👌 捏合=聚集";
+            });
         }
 
         function onHandsResults(results) {
-            // Priority: Touch > Hand
-            if (isTouching) return; // Touch overrides camera
+            if (isTouching) return; 
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
@@ -443,33 +591,30 @@
                     Math.pow(thumbTip.y - indexTip.y, 2)
                 );
 
-                // Map distance: 0.02 (Pinch) -> 0 (Assemble), 0.15 (Open) -> 1 (Scatter)
-                let targetLevel = (distance - 0.02) * 8; 
+                let targetLevel = (distance - 0.03) * 6; 
                 targetLevel = Math.max(0, Math.min(1, targetLevel)); 
                 
-                if (targetLevel < 0.2) {
+                if (targetLevel < 0.3) { 
                     targetLevel = 0;
                     gestureHint.innerText = "✨ 保持捏合 (Pinch) ✨";
                 } else {
                     gestureHint.innerText = "👐 张开双手 (Open)";
                 }
 
-                dispersionLevel += (targetLevel - dispersionLevel) * 0.1;
+                dispersionLevel += (targetLevel - dispersionLevel) * 0.2; 
             } else {
-                // Default drift back to scattered if no hands/touch
-                dispersionLevel += (1 - dispersionLevel) * 0.05;
+                dispersionLevel += (1 - dispersionLevel) * 0.1;
             }
             
             handleSequenceLogic();
         }
 
         function handleSequenceLogic() {
-            // Logic: Must fully Assemble (level near 0) then Scatter (level near 1) to switch text
-            if (dispersionLevel < 0.2) {
+            if (dispersionLevel < 0.3) {
                 hasAssembledOnce = true;
             }
 
-            if (hasAssembledOnce && dispersionLevel > 0.8) {
+            if (hasAssembledOnce && dispersionLevel > 0.6) {
                 hasAssembledOnce = false;
                 switchText();
             }
@@ -487,18 +632,14 @@
             const positions = geometry.attributes.position.array;
             const time = Date.now() * 0.001;
 
-            // Manual Touch Logic override for animate loop
             if (isTouching) {
-                // Force assemble
-                dispersionLevel += (0 - dispersionLevel) * 0.1;
-                gestureHint.innerText = "✨ 松开以散播祝福 ✨";
+                dispersionLevel += (0 - dispersionLevel) * 0.15; 
+                gestureHint.innerText = "✨ 松开以切换 ✨";
                 handleSequenceLogic();
             } else if (!document.querySelector('.input_video').srcObject) {
-                 // If no camera and no touch, drift to scatter
-                 dispersionLevel += (1 - dispersionLevel) * 0.05;
+                 dispersionLevel += (1 - dispersionLevel) * 0.1;
             }
 
-            // Update Particle Positions
             for (let i = 0; i < CONFIG.particleCount; i++) {
                 const ix = i * 3;
                 const iy = i * 3 + 1;
@@ -507,17 +648,14 @@
                 const currentVec = new THREE.Vector3(positions[ix], positions[iy], positions[iz]);
                 const randomVec = randomPositions[i].clone();
                 
-                // Float effect
-                randomVec.x += Math.sin(time + i) * 2;
-                randomVec.y += Math.cos(time + i * 0.5) * 2;
+                randomVec.x += Math.sin(time + i * 0.1) * 3;
+                randomVec.y += Math.cos(time + i * 0.05) * 3;
 
                 const textVec = targetPositions[i] || new THREE.Vector3(0,0,0);
                 
-                // Interpolate
                 const destVec = new THREE.Vector3().lerpVectors(textVec, randomVec, dispersionLevel);
 
-                // Move
-                const speed = 0.05 + (1 - dispersionLevel) * 0.05; 
+                const speed = 0.1 + (1 - dispersionLevel) * 0.1; 
                 currentVec.lerp(destVec, speed);
 
                 positions[ix] = currentVec.x;
@@ -527,9 +665,8 @@
 
             geometry.attributes.position.needsUpdate = true;
 
-            // Camera float
-            camera.position.x = Math.sin(time * 0.2) * 5;
-            camera.position.y = Math.cos(time * 0.3) * 5;
+            camera.position.x = Math.sin(time * 0.1) * 3;
+            camera.position.y = Math.cos(time * 0.15) * 3;
             camera.lookAt(0, 0, 0);
 
             renderer.render(scene, camera);
