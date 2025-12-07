@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>For Clover - 3D Particle Surprise</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #050505; 
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            user-select: none;
+        }
+        #canvas-container { 
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            z-index: 1; 
+        }
+        
+        /* UI Overlay */
+        #ui {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            text-align: center;
+            color: rgba(255, 183, 197, 0.9);
+            pointer-events: none;
+            width: 80%;
+        }
+        
+        .instruction {
+            font-size: 14px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+            letter-spacing: 1px;
+        }
+
+        .highlight {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        #progress-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 0 auto 15px auto;
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+            width: 0%; 
+            transition: width 0.1s;
+        }
+        
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 105, 180, 0.4);
+            color: #FFB7C5;
+            padding: 8px 24px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 12px;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s;
+            pointer-events: auto;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        button:hover { 
+            background: rgba(255, 105, 180, 0.2); 
+            border-color: rgba(255, 105, 180, 0.8);
+            box-shadow: 0 0 15px rgba(255, 105, 180, 0.4); 
+        }
+
+        #video-feedback {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 160px;
+            height: 120px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 5;
+            opacity: 0.5;
+            display: none; /* 默认隐藏，摄像头开启后显示 */
+            transform: scaleX(-1); /* 镜像 */
+        }
+    </style>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    <video id="video-feedback" autoplay playsinline muted></video>
+    
+    <div id="ui">
+        <div id="progress-bar"><div id="progress-fill"></div></div>
+        <div class="instruction" id="status-text">
+            <span class="highlight">上下移动鼠标</span> (或手指) 来控制粒子聚散
+        </div>
+        <button id="cam-btn">尝试开启摄像头控制</button>
+    </div>
+
+    <script>
+        // --- 个性化配置 ---
+        const CONFIG = {
+            words: ["3", "2", "1", "Clover", "Happy", "Birthday", "祝你", "开心", "快乐", "每一天", "❤️"],
+            colors: [0xFFB7C5, 0xFF69B4, 0xE0B0FF, 0xFF1493, 0xFFFFFF], // 樱花粉, 热粉, 浅紫, 深粉, 白
+            particleCount: 3500,
+            particleSize: 0.35, // 稍微增大粒子使其更明显
+            font: "900 100px Arial, 'Microsoft YaHei', sans-serif"
+        };
+
+        // --- 全局状态 ---
+        let scene, camera, renderer, particles, geometry;
+        let positions, targetPositions, randomPositions;
+        let wordIndex = 0;
+        
+        // 核心控制变量：0 = 完全聚合(显示文字), 1 = 完全炸开(散乱)
+        let interactionFactor = 1.0; 
+        let targetInteractionFactor = 1.0; 
+        let isCameraActive = false;
+        
+        // 状态机
+        let hasExplodedOnce = true; 
+
+        // --- 初始化 Three.js ---
+        function init() {
+            try {
+                const container = document.getElementById('canvas-container');
+                
+                // 场景
+                scene = new THREE.Scene();
+                scene.fog = new THREE.FogExp2(0x050505, 0.035);
+
+                // 相机
+                camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.z = 30;
+
+                // 渲染器
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                container.appendChild(renderer.domElement);
+
+                // 创建粒子
+                createParticles();
+                
+                // 初始文字
+                calculateTextTargets(CONFIG.words[0]);
+                
+                // 事件监听
+                window.addEventListener('resize', onWindowResize, false);
+                
+                // 鼠标/触摸模拟交互
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('touchmove', onTouchMove, { passive: false });
+
+                // 动画循环
+                animate();
+                console.log("Three.js initialized successfully");
+            } catch (e) {
+                console.error("Initialization error:", e);
+                alert("初始化失败，请检查网络或浏览器是否支持WebGL");
+            }
+        }
+
+        // --- 粒子系统创建 ---
+        function createParticles() {
+            geometry = new THREE.BufferGeometry();
+            positions = new Float32Array(CONFIG.particleCount * 3);
+            const colors = new Float32Array(CONFIG.particleCount * 3);
+            const sizes = new Float32Array(CONFIG.particleCount);
+
+            const colorHelper = new THREE.Color();
+
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                // 初始位置：随机散布在空间中
+                positions[i * 3] = (Math.random() - 0.5) * 60;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 60;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+
+                // 颜色
+                colorHelper.setHex(CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)]);
+                colors[i * 3] = colorHelper.r;
+                colors[i * 3 + 1] = colorHelper.g;
+                colors[i * 3 + 2] = colorHelper.b;
+
+                // 大小随机
+                sizes[i] = Math.random() * 0.5 + 0.5;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            // 自定义纹理 (Canvas画一个发光圆)
+            const sprite = createGlowTexture();
+
+            const material = new THREE.PointsMaterial({
+                size: CONFIG.particleSize,
+                map: sprite,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthTest: false,
+                transparent: true,
+                opacity: 0.9 // 增加不透明度
+            });
+
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+
+            // 初始化位置数组
+            targetPositions = new Float32Array(CONFIG.particleCount * 3); // 文字目标位置
+            randomPositions = new Float32Array(CONFIG.particleCount * 3); // 爆炸目标位置
+            
+            // 填充 randomPositions
+            for(let i=0; i<CONFIG.particleCount * 3; i++) {
+                randomPositions[i] = (Math.random() - 0.5) * 80; // 扩散范围
+            }
+        }
+
+        // --- 文字生成 (Canvas 2D -> 3D Coordinates) ---
+        function calculateTextTargets(text) {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const size = 1024; // 画布大小
+                canvas.width = size;
+                canvas.height = size;
+
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, size, size);
+                
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'white';
+                ctx.font = CONFIG.font;
+                
+                // 绘制文字
+                ctx.fillText(text, size / 2, size / 2);
+
+                const imageData = ctx.getImageData(0, 0, size, size);
+                const data = imageData.data;
+                
+                let validPixels = [];
+                const step = 4; // 采样步长
+
+                for (let y = 0; y < size; y += step) {
+                    for (let x = 0; x < size; x += step) {
+                        const index = (y * size + x) * 4;
+                        // 如果像素亮度足够
+                        if (data[index] > 100) {
+                            validPixels.push({
+                                x: (x - size / 2) * 0.05, // 缩放系数
+                                y: -(y - size / 2) * 0.05, 
+                                z: 0
+                            });
+                        }
+                    }
+                }
+
+                // *** 修复：防止空数组导致的崩溃 ***
+                if (validPixels.length === 0) {
+                    console.warn("No pixels found for text: " + text);
+                    // 制造一个默认的球体作为 fallback，避免消失
+                    for (let k = 0; k < 100; k++) {
+                        validPixels.push({
+                            x: (Math.random() - 0.5) * 10,
+                            y: (Math.random() - 0.5) * 10,
+                            z: 0
+                        });
+                    }
+                }
+
+                // 将有效像素分配给粒子
+                for (let i = 0; i < CONFIG.particleCount; i++) {
+                    const i3 = i * 3;
+                    if (i < validPixels.length) {
+                        const p = validPixels[i];
+                        targetPositions[i3] = p.x;
+                        targetPositions[i3 + 1] = p.y;
+                        targetPositions[i3 + 2] = p.z;
+                    } else {
+                        // 多余的粒子就在文字周围盘旋
+                        const randomP = validPixels[Math.floor(Math.random() * validPixels.length)];
+                        // 安全检查：如果 randomP 还是 undefined (极端情况)，则归零
+                        if (randomP) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const radius = 5 + Math.random() * 5;
+                            targetPositions[i3] = randomP.x + Math.cos(angle) * radius;
+                            targetPositions[i3 + 1] = randomP.y + Math.sin(angle) * radius;
+                            targetPositions[i3 + 2] = (Math.random() - 0.5) * 20;
+                        } else {
+                            targetPositions[i3] = 0;
+                            targetPositions[i3+1] = 0;
+                            targetPositions[i3+2] = 0;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Error calculating text targets:", e);
+            }
+        }
+
+        // --- 辅助功能：创建发光纹理 ---
+        function createGlowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const context = canvas.getContext('2d');
+            const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.2, 'rgba(255, 200, 220, 1)');
+            gradient.addColorStop(0.5, 'rgba(255, 105, 180, 0.4)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            context.fillStyle = gradient;
+            context.fillRect(0,0,32,32);
+            return new THREE.Texture(canvas);
+        }
+        
+        let glowTexture;
+        try {
+            glowTexture = createGlowTexture();
+            glowTexture.needsUpdate = true;
+        } catch(e) {
+            console.error(e);
+        }
+
+        // --- 核心动画循环 ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 平滑插值 interactionFactor
+            interactionFactor += (targetInteractionFactor - interactionFactor) * 0.1;
+
+            // 逻辑检查：如果已经炸开（>0.8）然后聚合（<0.3），则切换单词
+            if (interactionFactor > 0.8) {
+                hasExplodedOnce = true;
+                document.getElementById('status-text').innerHTML = isCameraActive ? "检测到手势张开：<span class='highlight'>释放能量</span>" : "鼠标向上：<span class='highlight'>释放能量</span>";
+            }
+            if (interactionFactor < 0.2 && hasExplodedOnce) {
+                hasExplodedOnce = false;
+                nextWord();
+                document.getElementById('status-text').innerHTML = isCameraActive ? "检测到手势捏合：<span class='highlight'>捕获心意</span>" : "鼠标向下：<span class='highlight'>捕获心意</span>";
+            }
+
+            // 更新 UI 进度条
+            document.getElementById('progress-fill').style.width = (interactionFactor * 100) + "%";
+
+            // 粒子运动逻辑
+            if (particles) {
+                const posAttr = geometry.attributes.position;
+                const currentArr = posAttr.array;
+
+                // 稍微旋转整个粒子群
+                particles.rotation.y += 0.002;
+                // 当炸开时，旋转更加剧烈
+                particles.rotation.z += 0.001 + (interactionFactor * 0.005);
+
+                for (let i = 0; i < CONFIG.particleCount; i++) {
+                    const i3 = i * 3;
+
+                    // 计算当前粒子的最终目标位置
+                    // 混合逻辑： Lerp(文字位置, 随机位置, 炸开系数)
+                    let tx, ty, tz;
+                    
+                    if (interactionFactor < 0.05) {
+                        // 纯文字状态，非常稳定
+                        tx = targetPositions[i3];
+                        ty = targetPositions[i3+1];
+                        tz = targetPositions[i3+2];
+                    } else {
+                        // 混合状态
+                        // 爆炸位置 = 随机位置 * 爆炸系数 (让它炸得更远)
+                        const explosionScale = 1 + interactionFactor * 2; 
+                        
+                        const randX = randomPositions[i3] * explosionScale;
+                        const randY = randomPositions[i3+1] * explosionScale;
+                        const randZ = randomPositions[i3+2] * explosionScale;
+
+                        tx = targetPositions[i3] + (randX - targetPositions[i3]) * interactionFactor;
+                        ty = targetPositions[i3+1] + (randY - targetPositions[i3+1]) * interactionFactor;
+                        tz = targetPositions[i3+2] + (randZ - targetPositions[i3+2]) * interactionFactor;
+                    }
+
+                    // 简单的物理平滑跟随
+                    currentArr[i3] += (tx - currentArr[i3]) * 0.08;
+                    currentArr[i3+1] += (ty - currentArr[i3+1]) * 0.08;
+                    currentArr[i3+2] += (tz - currentArr[i3+2]) * 0.08;
+                }
+
+                posAttr.needsUpdate = true;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        function nextWord() {
+            wordIndex = (wordIndex + 1) % CONFIG.words.length;
+            calculateTextTargets(CONFIG.words[wordIndex]);
+        }
+
+        // --- 交互控制 (鼠标/触摸) ---
+        function onMouseMove(event) {
+            if (isCameraActive) return; // 如果摄像头开启，忽略鼠标
+            // 映射 Y 轴位置： 屏幕底部(合拢) -> 屏幕顶部(张开)
+            // 翻转：让上面是散开(1)，下面是聚合(0)
+            const ratio = 1 - (event.clientY / window.innerHeight);
+            targetInteractionFactor = Math.max(0, Math.min(1, ratio));
+        }
+
+        function onTouchMove(event) {
+            if (isCameraActive) return;
+            event.preventDefault(); // 防止滚动
+            const ratio = 1 - (event.touches[0].clientY / window.innerHeight);
+            targetInteractionFactor = Math.max(0, Math.min(1, ratio));
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- 摄像头与手势识别 (MediaPipe) ---
+        // 注意：这部分在没有 HTTPS 或本地 localhost 环境下可能无法运行
+        const videoElement = document.getElementById('video-feedback');
+        const camBtn = document.getElementById('cam-btn');
+
+        camBtn.addEventListener('click', async () => {
+            camBtn.innerText = "正在初始化摄像头...";
+            try {
+                const hands = new Hands({locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }});
+
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.7,
+                    minTrackingConfidence: 0.7
+                });
+
+                hands.onResults(onHandResults);
+
+                const cameraUtils = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({image: videoElement});
+                    },
+                    width: 320,
+                    height: 240
+                });
+                
+                await cameraUtils.start();
+                
+                isCameraActive = true;
+                videoElement.style.display = 'block';
+                camBtn.style.display = 'none';
+                document.getElementById('status-text').innerHTML = "摄像头已激活。请对着摄像头<span class='highlight'>张开/捏合</span>五指";
+
+            } catch (error) {
+                console.error(error);
+                camBtn.innerText = "摄像头启动失败 (请使用HTTPS或本地环境)";
+                setTimeout(() => {
+                    camBtn.innerText = "继续使用鼠标控制";
+                }, 2000);
+            }
+        });
+
+        function onHandResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // 简单的手势张合算法：
+                // 计算拇指指尖(4)与食指指尖(8)的距离，再除以手掌基准大小(0->17)
+                const p4 = landmarks[4];
+                const p8 = landmarks[8];
+                const p0 = landmarks[0];
+                const p17 = landmarks[17];
+
+                const distTips = Math.hypot(p4.x - p8.x, p4.y - p8.y);
+                const distPalm = Math.hypot(p0.x - p17.x, p0.y - p17.y);
+
+                // 归一化比率
+                let ratio = distTips / distPalm; 
+                
+                // 调整参数：通常闭合时 ratio < 0.2，张开时 ratio > 0.8
+                // 映射到 0 ~ 1
+                let openLevel = (ratio - 0.2) * 2.0; 
+                targetInteractionFactor = Math.max(0, Math.min(1, openLevel));
+            } else {
+                // 如果手移出了画面，默认慢慢回到炸开状态(等待)或者保持原状
+                // targetInteractionFactor = 1.0; 
+            }
+        }
+
+        // 启动
+        init();
+
+    </script>
+</body>
+</html>
