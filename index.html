@@ -1,435 +1,538 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>For Clover - 3D Particle Surprise</title>
+    <title>Happy Birthday Clover</title>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background-color: #050505; 
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
             font-family: 'Helvetica Neue', Arial, sans-serif;
             user-select: none;
+            -webkit-user-select: none;
         }
-        #canvas-container { 
-            width: 100vw; 
-            height: 100vh; 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            z-index: 1; 
-        }
-        
-        /* UI Overlay */
-        #ui {
+
+        #canvas-container {
             position: absolute;
-            bottom: 40px;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1s ease;
+        }
+
+        .hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        /* Start Button & Intro */
+        #start-screen {
+            text-align: center;
+            color: white;
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 105, 180, 0.3);
+            box-shadow: 0 0 30px rgba(255, 105, 180, 0.2);
+            max-width: 90%;
+        }
+
+        h1 {
+            font-weight: 300;
+            font-size: 2rem;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+            color: #fff;
+        }
+
+        .quote {
+            font-style: italic;
+            color: #ffb7c5;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        button {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: linear-gradient(45deg, #ff69b4, #9370db);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 5px 15px rgba(147, 112, 219, 0.4);
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(147, 112, 219, 0.6);
+        }
+
+        /* Status & Hints */
+        #status-bar {
+            position: absolute;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 10;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
             text-align: center;
-            color: rgba(255, 183, 197, 0.9);
-            pointer-events: none;
-            width: 80%;
-        }
-        
-        .instruction {
-            font-size: 14px;
-            margin-bottom: 15px;
-            text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
-            letter-spacing: 1px;
+            width: 100%;
         }
 
-        .highlight {
-            color: #fff;
+        #gesture-hint {
+            margin-top: 5px;
             font-weight: bold;
+            color: #ff69b4;
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
         }
 
-        #progress-bar {
-            width: 200px;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            margin: 0 auto 15px auto;
-            border-radius: 2px;
-            overflow: hidden;
-            position: relative;
+        /* Camera Feed (Hidden, used for processing) */
+        .input_video {
+            display: none;
         }
 
-        #progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
-            width: 0%; 
-            transition: width 0.1s;
-        }
-        
-        button {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 105, 180, 0.4);
-            color: #FFB7C5;
-            padding: 8px 24px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-size: 12px;
-            backdrop-filter: blur(4px);
-            transition: all 0.3s;
-            pointer-events: auto;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        button:hover { 
-            background: rgba(255, 105, 180, 0.2); 
-            border-color: rgba(255, 105, 180, 0.8);
-            box-shadow: 0 0 15px rgba(255, 105, 180, 0.4); 
-        }
-
-        #video-feedback {
+        /* Music Toggle */
+        #music-toggle {
             position: absolute;
             top: 20px;
             right: 20px;
-            width: 160px;
-            height: 120px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 5;
+            z-index: 20;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
             opacity: 0.5;
-            display: none; /* 默认隐藏，摄像头开启后显示 */
-            transform: scaleX(-1); /* 镜像 */
+            transition: opacity 0.3s;
+            pointer-events: auto;
         }
+        #music-toggle:hover { opacity: 1; }
+
     </style>
-    <!-- Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- MediaPipe Hands -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 </head>
 <body>
 
-    <div id="canvas-container"></div>
-    <video id="video-feedback" autoplay playsinline muted></video>
-    
-    <div id="ui">
-        <div id="progress-bar"><div id="progress-fill"></div></div>
-        <div class="instruction" id="status-text">
-            <span class="highlight">上下移动鼠标</span> (或手指) 来控制粒子聚散
+    <!-- UI Layer -->
+    <div id="ui-layer">
+        <div id="start-screen">
+            <h1>For Clover</h1>
+            <p class="quote">“This surprise is dedicated to Clover — the one who makes my world sparkle.”</p>
+            <button id="start-btn">开启惊喜 ✨</button>
+            <p style="font-size: 0.8rem; margin-top: 20px; color: #aaa;">
+                互动方式：<br>
+                1. 摄像头：捏合手指聚集，张开手掌散开<br>
+                2. 鼠标/触摸：按住聚集，松开散开
+            </p>
         </div>
-        <button id="cam-btn">尝试开启摄像头控制</button>
     </div>
 
-    <script>
-        // --- 个性化配置 ---
+    <div id="status-bar" class="hidden">
+        <span id="loading-text">系统初始化...</span>
+        <div id="gesture-hint">Waiting for input...</div>
+    </div>
+
+    <div id="music-toggle" class="hidden">🎵</div>
+
+    <!-- WebGL Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Hidden Video Element for MediaPipe -->
+    <video class="input_video" playsinline></video>
+
+    <!-- Import Maps for Three.js & MediaPipe -->
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
+        import { Hands } from 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js';
+        import { Camera } from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js';
+
+        // --- Configuration ---
         const CONFIG = {
-            words: ["3", "2", "1", "Clover", "Happy", "Birthday", "祝你", "开心", "快乐", "每一天", "❤️"],
-            colors: [0xFFB7C5, 0xFF69B4, 0xE0B0FF, 0xFF1493, 0xFFFFFF], // 樱花粉, 热粉, 浅紫, 深粉, 白
-            particleCount: 3500,
-            particleSize: 0.35, // 稍微增大粒子使其更明显
-            font: "900 100px Arial, 'Microsoft YaHei', sans-serif"
+            particleCount: 4000,
+            colors: [0xff69b4, 0xffb7c5, 0x9370db, 0xffffff], // HotPink, LightPink, MediumPurple, White
+            textSequence: ["3", "2", "1", "Clover", "Happy", "Birthday", "祝你", "开心", "快乐", "每一天", "❤️"],
+            cameraZ: 100,
+            textScale: 0.6,
         };
 
-        // --- 全局状态 ---
-        let scene, camera, renderer, particles, geometry;
-        let positions, targetPositions, randomPositions;
-        let wordIndex = 0;
+        // --- Global Variables ---
+        let scene, camera, renderer, particles, geometry, material;
+        let targetPositions = []; 
+        let currentPositions = []; 
+        let randomPositions = []; 
+        let isScattered = true;
+        let dispersionLevel = 1.0; // 1 = Scattered, 0 = Assembled
+        let currentTextIndex = 0;
+        let audio;
+        let isAudioPlaying = false;
         
-        // 核心控制变量：0 = 完全聚合(显示文字), 1 = 完全炸开(散乱)
-        let interactionFactor = 1.0; 
-        let targetInteractionFactor = 1.0; 
-        let isCameraActive = false;
-        
-        // 状态机
-        let hasExplodedOnce = true; 
+        // Touch/Mouse Fallback state
+        let isTouching = false; 
+        let hasAssembledOnce = false; 
 
-        // --- 初始化 Three.js ---
-        function init() {
+        // --- Initialization ---
+        const startBtn = document.getElementById('start-btn');
+        const startScreen = document.getElementById('start-screen');
+        const statusBar = document.getElementById('status-bar');
+        const loadingText = document.getElementById('loading-text');
+        const gestureHint = document.getElementById('gesture-hint');
+        const musicToggle = document.getElementById('music-toggle');
+
+        startBtn.addEventListener('click', async () => {
+            initAudio();
+            
+            startScreen.style.opacity = '0';
+            setTimeout(() => {
+                startScreen.classList.add('hidden');
+                statusBar.classList.remove('hidden');
+                musicToggle.classList.remove('hidden');
+            }, 1000);
+
+            initThree();
+            generateTextTargets(CONFIG.textSequence[0]);
+            
+            // Try to init MediaPipe, but fail gracefully if in preview env
             try {
-                const container = document.getElementById('canvas-container');
-                
-                // 场景
-                scene = new THREE.Scene();
-                scene.fog = new THREE.FogExp2(0x050505, 0.035);
-
-                // 相机
-                camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-                camera.position.z = 30;
-
-                // 渲染器
-                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                container.appendChild(renderer.domElement);
-
-                // 创建粒子
-                createParticles();
-                
-                // 初始文字
-                calculateTextTargets(CONFIG.words[0]);
-                
-                // 事件监听
-                window.addEventListener('resize', onWindowResize, false);
-                
-                // 鼠标/触摸模拟交互
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('touchmove', onTouchMove, { passive: false });
-
-                // 动画循环
-                animate();
-                console.log("Three.js initialized successfully");
+                initMediaPipe();
             } catch (e) {
-                console.error("Initialization error:", e);
-                alert("初始化失败，请检查网络或浏览器是否支持WebGL");
+                console.warn("MediaPipe init failed (likely due to iframe permissions). Using mouse/touch fallback.");
+                loadingText.innerText = "使用鼠标/触摸模式";
+                gestureHint.innerText = "按住屏幕聚集粒子";
             }
+            
+            animate();
+        });
+
+        // --- Audio ---
+        function initAudio() {
+            // Using a simple royalty-free base64 or external link. 
+            // External links can be flaky in previews, so we handle errors gently.
+            audio = new Audio('https://cdn.pixabay.com/audio/2022/02/07/audio_1303830d1c.mp3'); 
+            audio.loop = true;
+            audio.volume = 0.5;
+            
+            musicToggle.addEventListener('click', () => {
+                if(isAudioPlaying) {
+                    audio.pause();
+                    musicToggle.style.opacity = '0.5';
+                } else {
+                    audio.play();
+                    musicToggle.style.opacity = '1';
+                }
+                isAudioPlaying = !isAudioPlaying;
+            });
+            
+            audio.play().then(() => {
+                isAudioPlaying = true;
+                musicToggle.style.opacity = '1';
+            }).catch(e => {
+                console.log("Audio autoplay blocked, user interaction needed");
+                isAudioPlaying = false;
+                musicToggle.style.opacity = '0.5';
+            });
         }
 
-        // --- 粒子系统创建 ---
+        // --- Three.js Setup ---
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050505, 0.002);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = CONFIG.cameraZ;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            createParticles();
+
+            window.addEventListener('resize', onWindowResize);
+            
+            // Mouse/Touch Fallback
+            // Mousedown/Touchstart = Pinch (Assemble)
+            document.addEventListener('mousedown', () => { isTouching = true; });
+            document.addEventListener('mouseup', () => { isTouching = false; });
+            document.addEventListener('touchstart', (e) => { isTouching = true; e.preventDefault(); }, {passive: false});
+            document.addEventListener('touchend', () => { isTouching = false; });
+        }
+
         function createParticles() {
             geometry = new THREE.BufferGeometry();
-            positions = new Float32Array(CONFIG.particleCount * 3);
-            const colors = new Float32Array(CONFIG.particleCount * 3);
-            const sizes = new Float32Array(CONFIG.particleCount);
-
-            const colorHelper = new THREE.Color();
-
+            const posArray = new Float32Array(CONFIG.particleCount * 3);
+            const colorArray = new Float32Array(CONFIG.particleCount * 3);
+            
             for (let i = 0; i < CONFIG.particleCount; i++) {
-                // 初始位置：随机散布在空间中
-                positions[i * 3] = (Math.random() - 0.5) * 60;
-                positions[i * 3 + 1] = (Math.random() - 0.5) * 60;
-                positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+                // Random scattered positions
+                const r = 150 + Math.random() * 100;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                const x = r * Math.sin(phi) * Math.cos(theta);
+                const y = r * Math.sin(phi) * Math.sin(theta);
+                const z = r * Math.cos(phi);
 
-                // 颜色
-                colorHelper.setHex(CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)]);
-                colors[i * 3] = colorHelper.r;
-                colors[i * 3 + 1] = colorHelper.g;
-                colors[i * 3 + 2] = colorHelper.b;
+                randomPositions.push(new THREE.Vector3(x, y, z));
+                targetPositions.push(new THREE.Vector3(0, 0, 0));
+                
+                posArray[i * 3] = x;
+                posArray[i * 3 + 1] = y;
+                posArray[i * 3 + 2] = z;
 
-                // 大小随机
-                sizes[i] = Math.random() * 0.5 + 0.5;
+                // Colors
+                const colorHex = CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)];
+                const color = new THREE.Color(colorHex);
+                colorArray[i * 3] = color.r;
+                colorArray[i * 3 + 1] = color.g;
+                colorArray[i * 3 + 2] = color.b;
             }
 
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
 
-            // 自定义纹理 (Canvas画一个发光圆)
-            const sprite = createGlowTexture();
+            const sprite = getTexture();
 
-            const material = new THREE.PointsMaterial({
-                size: CONFIG.particleSize,
-                map: sprite,
+            material = new THREE.PointsMaterial({
+                size: 2.5,
                 vertexColors: true,
+                map: sprite,
                 blending: THREE.AdditiveBlending,
-                depthTest: false,
+                depthWrite: false,
                 transparent: true,
-                opacity: 0.9 // 增加不透明度
+                opacity: 0.8
             });
 
             particles = new THREE.Points(geometry, material);
             scene.add(particles);
-
-            // 初始化位置数组
-            targetPositions = new Float32Array(CONFIG.particleCount * 3); // 文字目标位置
-            randomPositions = new Float32Array(CONFIG.particleCount * 3); // 爆炸目标位置
-            
-            // 填充 randomPositions
-            for(let i=0; i<CONFIG.particleCount * 3; i++) {
-                randomPositions[i] = (Math.random() - 0.5) * 80; // 扩散范围
-            }
         }
 
-        // --- 文字生成 (Canvas 2D -> 3D Coordinates) ---
-        function calculateTextTargets(text) {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const size = 1024; // 画布大小
-                canvas.width = size;
-                canvas.height = size;
-
-                ctx.fillStyle = 'black';
-                ctx.fillRect(0, 0, size, size);
-                
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = 'white';
-                ctx.font = CONFIG.font;
-                
-                // 绘制文字
-                ctx.fillText(text, size / 2, size / 2);
-
-                const imageData = ctx.getImageData(0, 0, size, size);
-                const data = imageData.data;
-                
-                let validPixels = [];
-                const step = 4; // 采样步长
-
-                for (let y = 0; y < size; y += step) {
-                    for (let x = 0; x < size; x += step) {
-                        const index = (y * size + x) * 4;
-                        // 如果像素亮度足够
-                        if (data[index] > 100) {
-                            validPixels.push({
-                                x: (x - size / 2) * 0.05, // 缩放系数
-                                y: -(y - size / 2) * 0.05, 
-                                z: 0
-                            });
-                        }
-                    }
-                }
-
-                // *** 修复：防止空数组导致的崩溃 ***
-                if (validPixels.length === 0) {
-                    console.warn("No pixels found for text: " + text);
-                    // 制造一个默认的球体作为 fallback，避免消失
-                    for (let k = 0; k < 100; k++) {
-                        validPixels.push({
-                            x: (Math.random() - 0.5) * 10,
-                            y: (Math.random() - 0.5) * 10,
-                            z: 0
-                        });
-                    }
-                }
-
-                // 将有效像素分配给粒子
-                for (let i = 0; i < CONFIG.particleCount; i++) {
-                    const i3 = i * 3;
-                    if (i < validPixels.length) {
-                        const p = validPixels[i];
-                        targetPositions[i3] = p.x;
-                        targetPositions[i3 + 1] = p.y;
-                        targetPositions[i3 + 2] = p.z;
-                    } else {
-                        // 多余的粒子就在文字周围盘旋
-                        const randomP = validPixels[Math.floor(Math.random() * validPixels.length)];
-                        // 安全检查：如果 randomP 还是 undefined (极端情况)，则归零
-                        if (randomP) {
-                            const angle = Math.random() * Math.PI * 2;
-                            const radius = 5 + Math.random() * 5;
-                            targetPositions[i3] = randomP.x + Math.cos(angle) * radius;
-                            targetPositions[i3 + 1] = randomP.y + Math.sin(angle) * radius;
-                            targetPositions[i3 + 2] = (Math.random() - 0.5) * 20;
-                        } else {
-                            targetPositions[i3] = 0;
-                            targetPositions[i3+1] = 0;
-                            targetPositions[i3+2] = 0;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("Error calculating text targets:", e);
-            }
-        }
-
-        // --- 辅助功能：创建发光纹理 ---
-        function createGlowTexture() {
+        function getTexture() {
             const canvas = document.createElement('canvas');
-            canvas.width = 32; canvas.height = 32;
+            canvas.width = 32;
+            canvas.height = 32;
             const context = canvas.getContext('2d');
             const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
             gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            gradient.addColorStop(0.2, 'rgba(255, 200, 220, 1)');
-            gradient.addColorStop(0.5, 'rgba(255, 105, 180, 0.4)');
+            gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.2)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             context.fillStyle = gradient;
-            context.fillRect(0,0,32,32);
-            return new THREE.Texture(canvas);
-        }
-        
-        let glowTexture;
-        try {
-            glowTexture = createGlowTexture();
-            glowTexture.needsUpdate = true;
-        } catch(e) {
-            console.error(e);
+            context.fillRect(0, 0, 32, 32);
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            return texture;
         }
 
-        // --- 核心动画循环 ---
+        function generateTextTargets(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const width = 400; 
+            const height = 200;
+            canvas.width = width;
+            canvas.height = height;
+
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+            
+            let fontSize = 100;
+            if (text.length > 5) fontSize = 60;
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, width / 2, height / 2);
+
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+
+            const tempTargets = [];
+            
+            // Adjust scan step based on particle density desire
+            for (let y = 0; y < height; y += 2) { 
+                for (let x = 0; x < width; x += 2) {
+                    const alpha = data[(y * width + x) * 4 + 3];
+                    if (alpha > 128) {
+                        const pX = (x - width / 2) * 0.5;
+                        const pY = -(y - height / 2) * 0.5;
+                        const pZ = 0;
+                        tempTargets.push(new THREE.Vector3(pX, pY, pZ));
+                    }
+                }
+            }
+
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                if (i < tempTargets.length) {
+                    targetPositions[i] = tempTargets[i];
+                } else {
+                    // Extras orbit center
+                    targetPositions[i] = tempTargets[i % tempTargets.length];
+                }
+            }
+        }
+
+        function initMediaPipe() {
+            const videoElement = document.querySelector('.input_video');
+            
+            const hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+            }});
+
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults(onHandsResults);
+
+            const cameraUtils = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({image: videoElement});
+                },
+                width: 640,
+                height: 480
+            });
+            
+            cameraUtils.start()
+                .then(() => {
+                    loadingText.innerText = "摄像头启动成功";
+                    gestureHint.innerText = "👐 张开=散开 | 👌 捏合=聚集";
+                })
+                .catch(err => {
+                    loadingText.innerText = "摄像头不可用，请使用点击模式";
+                    gestureHint.innerText = "按住屏幕聚集粒子";
+                    console.error("Camera failed:", err);
+                });
+        }
+
+        function onHandsResults(results) {
+            // Priority: Touch > Hand
+            if (isTouching) return; // Touch overrides camera
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const thumbTip = landmarks[4];
+                const indexTip = landmarks[8];
+
+                const distance = Math.sqrt(
+                    Math.pow(thumbTip.x - indexTip.x, 2) + 
+                    Math.pow(thumbTip.y - indexTip.y, 2)
+                );
+
+                // Map distance: 0.02 (Pinch) -> 0 (Assemble), 0.15 (Open) -> 1 (Scatter)
+                let targetLevel = (distance - 0.02) * 8; 
+                targetLevel = Math.max(0, Math.min(1, targetLevel)); 
+                
+                if (targetLevel < 0.2) {
+                    targetLevel = 0;
+                    gestureHint.innerText = "✨ 保持捏合 (Pinch) ✨";
+                } else {
+                    gestureHint.innerText = "👐 张开双手 (Open)";
+                }
+
+                dispersionLevel += (targetLevel - dispersionLevel) * 0.1;
+            } else {
+                // Default drift back to scattered if no hands/touch
+                dispersionLevel += (1 - dispersionLevel) * 0.05;
+            }
+            
+            handleSequenceLogic();
+        }
+
+        function handleSequenceLogic() {
+            // Logic: Must fully Assemble (level near 0) then Scatter (level near 1) to switch text
+            if (dispersionLevel < 0.2) {
+                hasAssembledOnce = true;
+            }
+
+            if (hasAssembledOnce && dispersionLevel > 0.8) {
+                hasAssembledOnce = false;
+                switchText();
+            }
+        }
+
+        function switchText() {
+            currentTextIndex = (currentTextIndex + 1) % CONFIG.textSequence.length;
+            const nextText = CONFIG.textSequence[currentTextIndex];
+            generateTextTargets(nextText);
+        }
+
         function animate() {
             requestAnimationFrame(animate);
 
-            // 平滑插值 interactionFactor
-            interactionFactor += (targetInteractionFactor - interactionFactor) * 0.1;
+            const positions = geometry.attributes.position.array;
+            const time = Date.now() * 0.001;
 
-            // 逻辑检查：如果已经炸开（>0.8）然后聚合（<0.3），则切换单词
-            if (interactionFactor > 0.8) {
-                hasExplodedOnce = true;
-                document.getElementById('status-text').innerHTML = isCameraActive ? "检测到手势张开：<span class='highlight'>释放能量</span>" : "鼠标向上：<span class='highlight'>释放能量</span>";
+            // Manual Touch Logic override for animate loop
+            if (isTouching) {
+                // Force assemble
+                dispersionLevel += (0 - dispersionLevel) * 0.1;
+                gestureHint.innerText = "✨ 松开以散播祝福 ✨";
+                handleSequenceLogic();
+            } else if (!document.querySelector('.input_video').srcObject) {
+                 // If no camera and no touch, drift to scatter
+                 dispersionLevel += (1 - dispersionLevel) * 0.05;
             }
-            if (interactionFactor < 0.2 && hasExplodedOnce) {
-                hasExplodedOnce = false;
-                nextWord();
-                document.getElementById('status-text').innerHTML = isCameraActive ? "检测到手势捏合：<span class='highlight'>捕获心意</span>" : "鼠标向下：<span class='highlight'>捕获心意</span>";
+
+            // Update Particle Positions
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                const ix = i * 3;
+                const iy = i * 3 + 1;
+                const iz = i * 3 + 2;
+
+                const currentVec = new THREE.Vector3(positions[ix], positions[iy], positions[iz]);
+                const randomVec = randomPositions[i].clone();
+                
+                // Float effect
+                randomVec.x += Math.sin(time + i) * 2;
+                randomVec.y += Math.cos(time + i * 0.5) * 2;
+
+                const textVec = targetPositions[i] || new THREE.Vector3(0,0,0);
+                
+                // Interpolate
+                const destVec = new THREE.Vector3().lerpVectors(textVec, randomVec, dispersionLevel);
+
+                // Move
+                const speed = 0.05 + (1 - dispersionLevel) * 0.05; 
+                currentVec.lerp(destVec, speed);
+
+                positions[ix] = currentVec.x;
+                positions[iy] = currentVec.y;
+                positions[iz] = currentVec.z;
             }
 
-            // 更新 UI 进度条
-            document.getElementById('progress-fill').style.width = (interactionFactor * 100) + "%";
+            geometry.attributes.position.needsUpdate = true;
 
-            // 粒子运动逻辑
-            if (particles) {
-                const posAttr = geometry.attributes.position;
-                const currentArr = posAttr.array;
+            // Camera float
+            camera.position.x = Math.sin(time * 0.2) * 5;
+            camera.position.y = Math.cos(time * 0.3) * 5;
+            camera.lookAt(0, 0, 0);
 
-                // 稍微旋转整个粒子群
-                particles.rotation.y += 0.002;
-                // 当炸开时，旋转更加剧烈
-                particles.rotation.z += 0.001 + (interactionFactor * 0.005);
-
-                for (let i = 0; i < CONFIG.particleCount; i++) {
-                    const i3 = i * 3;
-
-                    // 计算当前粒子的最终目标位置
-                    // 混合逻辑： Lerp(文字位置, 随机位置, 炸开系数)
-                    let tx, ty, tz;
-                    
-                    if (interactionFactor < 0.05) {
-                        // 纯文字状态，非常稳定
-                        tx = targetPositions[i3];
-                        ty = targetPositions[i3+1];
-                        tz = targetPositions[i3+2];
-                    } else {
-                        // 混合状态
-                        // 爆炸位置 = 随机位置 * 爆炸系数 (让它炸得更远)
-                        const explosionScale = 1 + interactionFactor * 2; 
-                        
-                        const randX = randomPositions[i3] * explosionScale;
-                        const randY = randomPositions[i3+1] * explosionScale;
-                        const randZ = randomPositions[i3+2] * explosionScale;
-
-                        tx = targetPositions[i3] + (randX - targetPositions[i3]) * interactionFactor;
-                        ty = targetPositions[i3+1] + (randY - targetPositions[i3+1]) * interactionFactor;
-                        tz = targetPositions[i3+2] + (randZ - targetPositions[i3+2]) * interactionFactor;
-                    }
-
-                    // 简单的物理平滑跟随
-                    currentArr[i3] += (tx - currentArr[i3]) * 0.08;
-                    currentArr[i3+1] += (ty - currentArr[i3+1]) * 0.08;
-                    currentArr[i3+2] += (tz - currentArr[i3+2]) * 0.08;
-                }
-
-                posAttr.needsUpdate = true;
-            }
-            
             renderer.render(scene, camera);
-        }
-
-        function nextWord() {
-            wordIndex = (wordIndex + 1) % CONFIG.words.length;
-            calculateTextTargets(CONFIG.words[wordIndex]);
-        }
-
-        // --- 交互控制 (鼠标/触摸) ---
-        function onMouseMove(event) {
-            if (isCameraActive) return; // 如果摄像头开启，忽略鼠标
-            // 映射 Y 轴位置： 屏幕底部(合拢) -> 屏幕顶部(张开)
-            // 翻转：让上面是散开(1)，下面是聚合(0)
-            const ratio = 1 - (event.clientY / window.innerHeight);
-            targetInteractionFactor = Math.max(0, Math.min(1, ratio));
-        }
-
-        function onTouchMove(event) {
-            if (isCameraActive) return;
-            event.preventDefault(); // 防止滚动
-            const ratio = 1 - (event.touches[0].clientY / window.innerHeight);
-            targetInteractionFactor = Math.max(0, Math.min(1, ratio));
         }
 
         function onWindowResize() {
@@ -437,82 +540,6 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
-
-        // --- 摄像头与手势识别 (MediaPipe) ---
-        // 注意：这部分在没有 HTTPS 或本地 localhost 环境下可能无法运行
-        const videoElement = document.getElementById('video-feedback');
-        const camBtn = document.getElementById('cam-btn');
-
-        camBtn.addEventListener('click', async () => {
-            camBtn.innerText = "正在初始化摄像头...";
-            try {
-                const hands = new Hands({locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-                }});
-
-                hands.setOptions({
-                    maxNumHands: 1,
-                    modelComplexity: 1,
-                    minDetectionConfidence: 0.7,
-                    minTrackingConfidence: 0.7
-                });
-
-                hands.onResults(onHandResults);
-
-                const cameraUtils = new Camera(videoElement, {
-                    onFrame: async () => {
-                        await hands.send({image: videoElement});
-                    },
-                    width: 320,
-                    height: 240
-                });
-                
-                await cameraUtils.start();
-                
-                isCameraActive = true;
-                videoElement.style.display = 'block';
-                camBtn.style.display = 'none';
-                document.getElementById('status-text').innerHTML = "摄像头已激活。请对着摄像头<span class='highlight'>张开/捏合</span>五指";
-
-            } catch (error) {
-                console.error(error);
-                camBtn.innerText = "摄像头启动失败 (请使用HTTPS或本地环境)";
-                setTimeout(() => {
-                    camBtn.innerText = "继续使用鼠标控制";
-                }, 2000);
-            }
-        });
-
-        function onHandResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                
-                // 简单的手势张合算法：
-                // 计算拇指指尖(4)与食指指尖(8)的距离，再除以手掌基准大小(0->17)
-                const p4 = landmarks[4];
-                const p8 = landmarks[8];
-                const p0 = landmarks[0];
-                const p17 = landmarks[17];
-
-                const distTips = Math.hypot(p4.x - p8.x, p4.y - p8.y);
-                const distPalm = Math.hypot(p0.x - p17.x, p0.y - p17.y);
-
-                // 归一化比率
-                let ratio = distTips / distPalm; 
-                
-                // 调整参数：通常闭合时 ratio < 0.2，张开时 ratio > 0.8
-                // 映射到 0 ~ 1
-                let openLevel = (ratio - 0.2) * 2.0; 
-                targetInteractionFactor = Math.max(0, Math.min(1, openLevel));
-            } else {
-                // 如果手移出了画面，默认慢慢回到炸开状态(等待)或者保持原状
-                // targetInteractionFactor = 1.0; 
-            }
-        }
-
-        // 启动
-        init();
-
     </script>
 </body>
 </html>
